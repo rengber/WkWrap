@@ -1,13 +1,14 @@
 # WkWrap
 [wkhtmltopdf](http://wkhtmltopdf.org/) cross-platform C# wrapper for .NET Core.
 ## Overview
-This project is build against [.NET Standard 1.4](https://docs.microsoft.com/en-us/dotnet/articles/standard/library) using the [RTM tooling](https://www.microsoft.com/net/download/core) that ships with [Visual Studio 2017](https://www.visualstudio.com/downloads/). This is the only configuration I'm support on the issue tracker. WkWrap calls wkhtmltopdf in stream-based processing mode, so you don't need to provide any temp folders.
+Wkhtmltopdf wrapper for .NET Standard 1.4 and higher.
+ WkWrap calls `wkhtmltopdf` in stream-based processing mode, so you don't need to provide any temp folders.
 
 ## Getting started
 ### Installation
-The current version of the library is [available on NuGet.](https://www.nuget.org/packages/WkWrap.Core)
+WkWrap is [available on NuGet.](https://www.nuget.org/packages/WkWrap)
 ```
-Install-Package WkWrap.Core
+Install-Package WkWrap
 ```
 ### Simple usage
 WkWrap is designed as easy to use wkhtmltopdf cross-platform wrapper. To start using it you need to [install wkhtmltopdf](http://wkhtmltopdf.org/downloads.html) on your system and create instance of *HtmlToPdfConverter* class. One thing you need to do is provide path to *wkhtmltopdf* executable file (may require chmod+x on \* nix based systems).
