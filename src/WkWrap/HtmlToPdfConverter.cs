@@ -9,7 +9,7 @@ namespace WkWrap
     /// <summary>
     /// Html to PDF converter (.NET WkHtmlToPdf process wrapper).
     /// </summary>
-    public class WkHtmlToPdfConverter
+    public class HtmlToPdfConverter
     {
         /// <summary>
         /// Gets wkhtmltopdf executable file.
@@ -17,10 +17,10 @@ namespace WkWrap
         private readonly FileInfo _wkHtmlToPdfExecutableFile;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="WkHtmlToPdfConverter"/> class.
+        /// Initializes a new instance of the <see cref="HtmlToPdfConverter"/> class.
         /// </summary>
         /// <param name="wkHtmlToPdfExecutableFile">wkhtmltopdf executable file.</param>
-        public WkHtmlToPdfConverter(FileInfo wkHtmlToPdfExecutableFile)
+        public HtmlToPdfConverter(FileInfo wkHtmlToPdfExecutableFile)
         {
             if (wkHtmlToPdfExecutableFile == null)
             {
