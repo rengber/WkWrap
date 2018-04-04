@@ -2,32 +2,37 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace WkWrap.Core
 {
     /// <summary>
-    /// Html to PDF converter (C# WkHtmlToPdf process wrapper).
+    /// Html to PDF converter (.NET WkHtmlToPdf process wrapper).
     /// </summary>
-    public class HtmlToPdfConverter : IHtmlToPdfConverter
+    public class WkHtmlToPdfConverter
     {
         /// <summary>
-        /// Constructs new instance of <see cref="HtmlToPdfConverter"/>.
+        /// Gets wkhtmltopdf executable file.
         /// </summary>
-        /// <param name="wkHtmlToPdfExecutableFile">wkhtmltopdf executable file.</param>
-        public HtmlToPdfConverter(
-            FileInfo wkHtmlToPdfExecutableFile)
-        {
-            if (wkHtmlToPdfExecutableFile == null)
-                throw new ArgumentNullException(nameof(wkHtmlToPdfExecutableFile));
-            if (wkHtmlToPdfExecutableFile.Exists != true)
-                throw new FileNotFoundException("wkhtmltopdf executable file not found!");
-            WkHtmlToPdfExecutableFile = wkHtmlToPdfExecutableFile;
-        }
+        private readonly FileInfo _wkHtmlToPdfExecutableFile;
 
         /// <summary>
-        /// Returns wkhtmltopdf executable file.
+        /// Initializes a new instance of the <see cref="WkHtmlToPdfConverter"/> class.
         /// </summary>
-        private FileInfo WkHtmlToPdfExecutableFile { get; }
+        /// <param name="wkHtmlToPdfExecutableFile">wkhtmltopdf executable file.</param>
+        public WkHtmlToPdfConverter(FileInfo wkHtmlToPdfExecutableFile)
+        {
+            if (wkHtmlToPdfExecutableFile == null)
+            {
+                throw new ArgumentNullException(nameof(wkHtmlToPdfExecutableFile));
+            }
+            if (!wkHtmlToPdfExecutableFile.Exists)
+            {
+                throw new FileNotFoundException($"wkhtmltopdf executable file not found at path '{wkHtmlToPdfExecutableFile.FullName}'.");
+            }
+
+            _wkHtmlToPdfExecutableFile = wkHtmlToPdfExecutableFile;
+        }
 
         /// <summary>
         /// Instance of wkhtmltopdf working process.
@@ -43,138 +48,135 @@ namespace WkWrap.Core
         public event EventHandler<DataReceivedEventArgs> LogReceived;
 
         /// <summary>
-        /// Generates PDF by specifed HTML content.
+        /// Generates a PDF using the specified HTML content with <see cref="ConversionSettings.CreateDefault"/>.
         /// </summary>
-        /// <param name="html">HTML content.</param>
-        /// <returns></returns>
-        public byte[] ConvertToPdf(string html)
-        {
-            return ConvertToPdf(html, Encoding.UTF8, ConversionSettings.Default());
-        }
+        /// <param name="html">The HTML content.</param>
+        public Task<byte[]> ConvertToPdfAsync(string html) => ConvertToPdfAsync(html, Encoding.UTF8, ConversionSettings.CreateDefault());
 
         /// <summary>
-        /// Generates PDF by specifed HTML content.
+        /// Generates a PDF using the specified HTML content and settings.
         /// </summary>
-        /// <param name="html">HTML content.</param>
-        /// <param name="htmlEncoding">HTML content encoding.</param>
-        /// <param name="settings">Conversion settings.</param>
-        /// <returns></returns>
-        public byte[] ConvertToPdf(string html, Encoding htmlEncoding, ConversionSettings settings)
+        /// <param name="html">The HTML content.</param>
+        /// <param name="settings">A <see cref="ConversionSettings"/> instance.</param>
+        public Task<byte[]> ConvertToPdfAsync(string html, ConversionSettings settings) => ConvertToPdfAsync(html, Encoding.UTF8, settings);
+
+        /// <summary>
+        /// Generates a PDF using the specified HTML content and settings.
+        /// </summary>
+        /// <param name="html">The HTML content.</param>
+        /// <param name="htmlEncoding">The encoding of the HTML content.</param>
+        /// <param name="settings">A <see cref="ConversionSettings"/> instance.</param>
+        public async Task<byte[]> ConvertToPdfAsync(string html, Encoding htmlEncoding, ConversionSettings settings)
         {
             if (settings == null)
+            {
                 throw new ArgumentNullException(nameof(settings));
+            }
 
             if (string.IsNullOrEmpty(html))
-                html = string.Empty;
-            byte[] result;
-            using (var inputStream = new MemoryStream(htmlEncoding.GetBytes(html)))
-            using (var outputStream = new MemoryStream())
             {
-                ConvertToPdf(inputStream, outputStream, settings);
-                result = outputStream.ToArray();
+                return Array.Empty<byte>();
             }
-            return result;
+
+            using (var input = new MemoryStream(htmlEncoding.GetBytes(html)))
+            using (var output = new MemoryStream())
+            {
+                await ConvertToPdfInternalAsync(input, output, settings.ToString(), settings.ExecutionTimeout);
+                return output.ToArray();
+            }
         }
 
         /// <summary>
-        /// Generate PDF into specified output <see cref="Stream" />.
+        /// Generates a PDF into specified output <see cref="Stream" />.
         /// </summary>
-        /// <param name="inputStream">HTML content input stream.</param>
-        /// <param name="outputStream">PDF file output stream.</param>
-        /// <param name="settings">Conversion settings.</param>
-        public void ConvertToPdf(
-            Stream inputStream,
-            Stream outputStream,
-            ConversionSettings settings)
+        /// <param name="input">HTML content input stream.</param>
+        /// <param name="output">PDF file output stream.</param>
+        public Task ConvertToPdf(Stream input, Stream output) => ConvertToPdf(input, output, ConversionSettings.CreateDefault());
+
+        /// <summary>
+        /// Generates a PDF into specified output <see cref="Stream" />.
+        /// </summary>
+        /// <param name="input">HTML content input stream.</param>
+        /// <param name="output">PDF file output stream.</param>
+        /// <param name="settings">wkhtmltopdf command line arguments.</param>
+        public Task ConvertToPdf(Stream input, Stream output, ConversionSettings settings)
         {
-            if (inputStream == null)
-                throw new ArgumentNullException(nameof(inputStream));
-            if (outputStream == null)
-                throw new ArgumentNullException(nameof(outputStream));
+            if (input == null)
+            {
+                throw new ArgumentNullException(nameof(input));
+            }
+            if (output == null)
+            {
+                throw new ArgumentNullException(nameof(output));
+            }
             if (settings == null)
+            {
                 throw new ArgumentNullException(nameof(settings));
+            }
 
-            ConvertToPdfInternal(inputStream, outputStream, settings.ToString().Trim(), settings.ExecutionTimeout);
+            return ConvertToPdfInternalAsync(input, output, settings.ToString(), settings.ExecutionTimeout);
         }
 
         /// <summary>
         /// Generate PDF into specified output <see cref="Stream" />.
         /// </summary>
-        /// <param name="inputStream">HTML content input stream.</param>
-        /// <param name="outputStream">PDF file output stream.</param>
+        /// <param name="input">HTML content input stream.</param>
+        /// <param name="output">PDF file output stream.</param>
         /// <param name="settings">wkhtmltopdf command line arguments.</param>
         /// <param name="executionTimeout">Maximum execution time for PDF generation process (null means that no timeout).</param>
-        public void ConvertToPdf(
-            Stream inputStream,
-            Stream outputStream,
-            string settings,
-            TimeSpan? executionTimeout = null)
-        {
-            if (inputStream == null)
-                throw new ArgumentNullException(nameof(inputStream));
-            if (outputStream == null)
-                throw new ArgumentNullException(nameof(outputStream));
-
-            var stringSetting = settings?.Trim() ?? string.Empty;
-            ConvertToPdfInternal(inputStream, outputStream, stringSetting, executionTimeout);
-        }
-
-        /// <summary>
-        /// Generate PDF into specified output <see cref="Stream" />.
-        /// </summary>
-        /// <param name="inputStream">HTML content input stream.</param>
-        /// <param name="outputStream">PDF file output stream.</param>
-        /// <param name="settings">wkhtmltopdf command line arguments.</param>
-        /// <param name="executionTimeout">Maximum execution time for PDF generation process (null means that no timeout).</param>
-        private void ConvertToPdfInternal(
-            Stream inputStream,
-            Stream outputStream,
-            string settings,
-            TimeSpan? executionTimeout)
+        private Task ConvertToPdfInternalAsync(Stream input, Stream output, string settings, TimeSpan? executionTimeout)
         {
             try
             {
                 CheckWkHtmlProcess();
-                InvokeWkHtmlToPdf(inputStream, outputStream, settings, executionTimeout);
+                return InvokeWkHtmlToPdfAsync(input, output, settings, executionTimeout);
             }
             catch (Exception ex)
             {
-                throw new Exception("Cannot generate PDF: " + ex.Message, ex);
+                throw new Exception("Failed to generate PDF: " + ex.Message, ex);
             }
         }
 
         /// <summary>
         /// Invokes wkhtmltopdf programm.
         /// </summary>
-        /// <param name="inputStream">HTML content input stream.</param>
-        /// <param name="outputStream">PDF file output stream.</param>
+        /// <param name="input">HTML content input stream.</param>
+        /// <param name="output">PDF file output stream.</param>
         /// <param name="settings">Conversion settings.</param>
         /// <param name="executionTimeout">Maximum execution time for PDF generation process (null means that no timeout).</param>
-        private void InvokeWkHtmlToPdf(
-            Stream inputStream,
-            Stream outputStream,
-            string settings,
-            TimeSpan? executionTimeout)
+        private async Task InvokeWkHtmlToPdfAsync(Stream input, Stream output, string settings, TimeSpan? executionTimeout)
         {
-            var arguments = $"{settings} - -";
+            var arguments = settings + " - -";
             try
             {
                 _wkHtmlToPdfProcess =
-                    Process.Start(new ProcessStartInfo(WkHtmlToPdfExecutableFile.FullName, arguments)
+                    Process.Start(new ProcessStartInfo
                     {
+                        FileName = _wkHtmlToPdfExecutableFile.FullName,
+                        Arguments = arguments,
                         CreateNoWindow = true,
                         UseShellExecute = false,
-                        WorkingDirectory = WkHtmlToPdfExecutableFile.Directory.FullName,
+                        WorkingDirectory = _wkHtmlToPdfExecutableFile.Directory.FullName,
                         RedirectStandardInput = true,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true
                     });
+
                 _wkHtmlToPdfProcess.ErrorDataReceived += ErrorDataHandler;
                 _wkHtmlToPdfProcess.BeginErrorReadLine();
-                inputStream.CopyTo(_wkHtmlToPdfProcess.StandardInput.BaseStream);
-                _wkHtmlToPdfProcess.StandardInput.BaseStream.Flush();
-                _wkHtmlToPdfProcess.StandardInput.Dispose();
-                _wkHtmlToPdfProcess.StandardOutput.BaseStream.CopyTo(outputStream);
+
+                var stdin = _wkHtmlToPdfProcess.StandardInput;
+                var stdout = _wkHtmlToPdfProcess.StandardOutput;
+
+                // Write the html content to the standard input stream.
+                await input.CopyToAsync(stdin.BaseStream);
+                await stdin.BaseStream.FlushAsync();
+                stdin.Dispose();
+
+                // Read the bytes representing the PDF from the standard output stream.
+                await stdout.BaseStream.CopyToAsync(output);
+
+                // Exit wkhtmltopdf process.
                 WaitWkHtmlProcessForExit(executionTimeout);
                 CheckExitCode(_wkHtmlToPdfProcess.ExitCode, _lastLogLine);
             }
@@ -195,9 +197,7 @@ namespace WkWrap.Core
         /// </summary>
         /// <param name="sender">Event sender.</param>
         /// <param name="e">Instance of <see cref="DataReceivedEventArgs"/>.</param>
-        private void ErrorDataHandler(
-            object sender,
-            DataReceivedEventArgs e)
+        private void ErrorDataHandler(object sender, DataReceivedEventArgs e)
         {
             if (!string.IsNullOrEmpty(e?.Data))
             {
@@ -207,13 +207,15 @@ namespace WkWrap.Core
         }
 
         /// <summary>
-        /// Check that wkhtmltopdf process is not running.
+        /// Checks whether the wkhtmltopdf process is not running.
         /// </summary>
         /// <exception cref="InvalidOperationException">Throws when wkhtmltopdf process is runnning.</exception>
         private void CheckWkHtmlProcess()
         {
             if (_wkHtmlToPdfProcess != null)
-                throw new InvalidOperationException("WkHtmlToPdf process is already started");
+            {
+                throw new InvalidOperationException("WkHtmlToPdf process has already started");
+            }
         }
 
         /// <summary>
@@ -224,18 +226,16 @@ namespace WkWrap.Core
         {
             if (executionTimeout.HasValue)
             {
-                if (!_wkHtmlToPdfProcess.WaitForExit((int) executionTimeout.Value.TotalMilliseconds))
+                if (!_wkHtmlToPdfProcess.WaitForExit((int)executionTimeout.Value.TotalMilliseconds))
                 {
                     EnsureWkHtmlProcessStopped();
-                    throw new WkWrapException(
-                        -2,
-                        string.Format(
-                            "WkHtmlToPdf process exceeded execution timeout ({0}) and was aborted",
-                            executionTimeout));
+                    throw new WkException(-2, string.Format("WkHtmlToPdf process exceeded execution timeout ({0}) and was aborted", executionTimeout));
                 }
             }
             else
+            {
                 _wkHtmlToPdfProcess.WaitForExit();
+            }
         }
 
         /// <summary>
@@ -244,7 +244,9 @@ namespace WkWrap.Core
         private void EnsureWkHtmlProcessStopped()
         {
             if (_wkHtmlToPdfProcess == null)
+            {
                 return;
+            }
             if (!_wkHtmlToPdfProcess.HasExited)
             {
                 try
@@ -252,13 +254,15 @@ namespace WkWrap.Core
                     _wkHtmlToPdfProcess.Kill();
                     _wkHtmlToPdfProcess = null;
                 }
-                catch (Exception)
+                catch
                 {
-                    // ignore
+                    // Ignore erros when stopping the process.
                 }
             }
             else
+            {
                 _wkHtmlToPdfProcess = null;
+            }
         }
 
         /// <summary>
@@ -274,7 +278,8 @@ namespace WkWrap.Core
                 {
                     return;
                 }
-                throw new WkWrapException(exitCode, lastErrorLine);
+
+                throw new WkException(exitCode, lastErrorLine);
             }
         }
 

@@ -1,7 +1,7 @@
 ﻿namespace WkWrap.Core
 {
     /// <summary>
-    /// PDF page size.
+    /// Specifies a PDF page size.
     /// </summary>
     public enum PageSize
     {
@@ -9,6 +9,7 @@
          * All possible page sizes
          * https://github.com/wkhtmltopdf/wkhtmltopdf/blob/0.12.4/src/lib/pdfsettings.cc#L173-L203
          */
+#pragma warning disable 1591
         Default,
         A0,
         A1,
@@ -40,5 +41,6 @@
         Legal,
         Letter,
         Tabloid
+#pragma warning restore 1591
     }
 }
