@@ -51,6 +51,122 @@ namespace WkWrap
         /// Generates a PDF using the specified HTML content with <see cref="ConversionSettings.CreateDefault"/>.
         /// </summary>
         /// <param name="html">The HTML content.</param>
+        public byte[] ConvertToPdf(string html) => ConvertToPdf(html, Encoding.UTF8, ConversionSettings.CreateDefault());
+
+        /// <summary>
+        /// Generates a PDF using the specified HTML content and settings.
+        /// </summary>
+        /// <param name="html">The HTML content.</param>
+        /// <param name="settings">A <see cref="ConversionSettings"/> instance.</param>
+        public byte[] ConvertToPdf(string html, ConversionSettings settings) => ConvertToPdf(html, Encoding.UTF8, settings);
+
+        /// <summary>
+        /// Generates a PDF using the specified HTML content and settings.
+        /// </summary>
+        /// <param name="html">The HTML content.</param>
+        /// <param name="htmlEncoding">The encoding of the HTML content.</param>
+        /// <param name="settings">A <see cref="ConversionSettings"/> instance.</param>
+        public byte[] ConvertToPdf(string html, Encoding htmlEncoding, ConversionSettings settings)
+        {
+            if (settings == null)
+            {
+                throw new ArgumentNullException(nameof(settings));
+            }
+
+            if (string.IsNullOrEmpty(html))
+            {
+                return Array.Empty<byte>();
+            }
+
+            using (var input = new MemoryStream(htmlEncoding.GetBytes(html)))
+            using (var output = new MemoryStream())
+            {
+                ConvertToPdfInternal(input, output, settings.ToString(), settings.ExecutionTimeout);
+                return output.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Generates a PDF into specified output <see cref="Stream" />.
+        /// </summary>
+        /// <param name="input">HTML content input stream.</param>
+        /// <param name="output">PDF file output stream.</param>
+        public void ConvertToPdf(Stream input, Stream output) => ConvertToPdf(input, output, ConversionSettings.CreateDefault());
+
+        /// <summary>
+        /// Generates a PDF into specified output <see cref="Stream" />.
+        /// </summary>
+        /// <param name="input">HTML content input stream.</param>
+        /// <param name="output">PDF file output stream.</param>
+        /// <param name="settings">wkhtmltopdf command line arguments.</param>
+        public void ConvertToPdf(Stream input, Stream output, ConversionSettings settings)
+        {
+            if (input == null)
+            {
+                throw new ArgumentNullException(nameof(input));
+            }
+            if (output == null)
+            {
+                throw new ArgumentNullException(nameof(output));
+            }
+            if (settings == null)
+            {
+                throw new ArgumentNullException(nameof(settings));
+            }
+
+            ConvertToPdfInternal(input, output, settings.ToString(), settings.ExecutionTimeout);
+        }
+
+        /// <summary>
+        /// Generate PDF into specified output <see cref="Stream" />.
+        /// </summary>
+        /// <param name="input">HTML content input stream.</param>
+        /// <param name="output">PDF file output stream.</param>
+        /// <param name="settings">wkhtmltopdf command line arguments.</param>
+        /// <param name="executionTimeout">Maximum execution time for PDF generation process (null means that no timeout).</param>
+        private void ConvertToPdfInternal(Stream input, Stream output, string settings, TimeSpan? executionTimeout)
+        {
+            try
+            {
+                CheckWkHtmlProcess();
+                InvokeWkHtmlToPdf(input, output, settings, executionTimeout);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to generate PDF: " + ex.Message, ex);
+            }
+        }
+
+        private void InvokeWkHtmlToPdf(Stream input, Stream output, string settings, TimeSpan? executionTimeout)
+        {
+            var arguments = settings + " - -";
+            try
+            {
+                CreateWkHtmlToPdfProcess(arguments, out var stdin, out var stdout);
+
+                // Write the html content to the standard input stream.
+                input.CopyTo(stdin.BaseStream);
+                stdin.BaseStream.Flush();
+                stdin.Dispose();
+
+                // Read the bytes representing the PDF from the standard output stream.
+                stdout.BaseStream.CopyTo(output);
+
+                // Exit wkhtmltopdf process.
+                WaitWkHtmlProcessForExit(executionTimeout);
+                CheckExitCode(_wkHtmlToPdfProcess.ExitCode, _lastLogLine);
+            }
+            finally
+            {
+                EnsureWkHtmlProcessStopped();
+                _lastLogLine = null;
+            }
+        }
+
+        /// <summary>
+        /// Generates a PDF using the specified HTML content with <see cref="ConversionSettings.CreateDefault"/>.
+        /// </summary>
+        /// <param name="html">The HTML content.</param>
         public Task<byte[]> ConvertToPdfAsync(string html) => ConvertToPdfAsync(html, Encoding.UTF8, ConversionSettings.CreateDefault());
 
         /// <summary>
@@ -137,36 +253,12 @@ namespace WkWrap
             }
         }
 
-        /// <summary>
-        /// Invokes wkhtmltopdf programm.
-        /// </summary>
-        /// <param name="input">HTML content input stream.</param>
-        /// <param name="output">PDF file output stream.</param>
-        /// <param name="settings">Conversion settings.</param>
-        /// <param name="executionTimeout">Maximum execution time for PDF generation process (null means that no timeout).</param>
         private async Task InvokeWkHtmlToPdfAsync(Stream input, Stream output, string settings, TimeSpan? executionTimeout)
         {
             var arguments = settings + " - -";
             try
             {
-                _wkHtmlToPdfProcess =
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = _wkHtmlToPdfExecutableFile.FullName,
-                        Arguments = arguments,
-                        CreateNoWindow = true,
-                        UseShellExecute = false,
-                        WorkingDirectory = _wkHtmlToPdfExecutableFile.Directory.FullName,
-                        RedirectStandardInput = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true
-                    });
-
-                _wkHtmlToPdfProcess.ErrorDataReceived += ErrorDataHandler;
-                _wkHtmlToPdfProcess.BeginErrorReadLine();
-
-                var stdin = _wkHtmlToPdfProcess.StandardInput;
-                var stdout = _wkHtmlToPdfProcess.StandardOutput;
+                CreateWkHtmlToPdfProcess(arguments, out var stdin, out var stdout);
 
                 // Write the html content to the standard input stream.
                 await input.CopyToAsync(stdin.BaseStream);
@@ -187,23 +279,25 @@ namespace WkWrap
             }
         }
 
-        /// <summary>
-        /// Stores last log line.
-        /// </summary>
-        private string _lastLogLine;
-
-        /// <summary>
-        /// Error handler to rethrow wkhtmltopdf log events.
-        /// </summary>
-        /// <param name="sender">Event sender.</param>
-        /// <param name="e">Instance of <see cref="DataReceivedEventArgs"/>.</param>
-        private void ErrorDataHandler(object sender, DataReceivedEventArgs e)
+        private void CreateWkHtmlToPdfProcess(string arguments, out StreamWriter stdin, out StreamReader stdout)
         {
-            if (!string.IsNullOrEmpty(e?.Data))
+            _wkHtmlToPdfProcess = Process.Start(new ProcessStartInfo
             {
-                _lastLogLine = e.Data;
-                LogReceived?.Invoke(this, e);
-            }
+                FileName = _wkHtmlToPdfExecutableFile.FullName,
+                Arguments = arguments,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                WorkingDirectory = _wkHtmlToPdfExecutableFile.Directory.FullName,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
+
+            _wkHtmlToPdfProcess.ErrorDataReceived += ErrorDataHandler;
+            _wkHtmlToPdfProcess.BeginErrorReadLine();
+
+            stdin = _wkHtmlToPdfProcess.StandardInput;
+            stdout = _wkHtmlToPdfProcess.StandardOutput;
         }
 
         /// <summary>
@@ -280,6 +374,25 @@ namespace WkWrap
                 }
 
                 throw new WkException(exitCode, lastErrorLine);
+            }
+        }
+
+        /// <summary>
+        /// Stores last log line.
+        /// </summary>
+        private string _lastLogLine;
+
+        /// <summary>
+        /// Error handler to rethrow wkhtmltopdf log events.
+        /// </summary>
+        /// <param name="sender">Event sender.</param>
+        /// <param name="e">Instance of <see cref="DataReceivedEventArgs"/>.</param>
+        private void ErrorDataHandler(object sender, DataReceivedEventArgs e)
+        {
+            if (!string.IsNullOrEmpty(e?.Data))
+            {
+                _lastLogLine = e.Data;
+                LogReceived?.Invoke(this, e);
             }
         }
 
