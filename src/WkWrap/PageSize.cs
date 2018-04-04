@@ -1,4 +1,4 @@
-﻿namespace WkWrap.Core
+﻿namespace WkWrap
 {
     /// <summary>
     /// Specifies a PDF page size.

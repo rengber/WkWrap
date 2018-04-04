@@ -1,4 +1,4 @@
-﻿namespace WkWrap.Core
+﻿namespace WkWrap
 {
     /// <summary>
     /// Struct that represents PDF page margins.

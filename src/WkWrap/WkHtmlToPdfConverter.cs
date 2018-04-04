@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace WkWrap.Core
+namespace WkWrap
 {
     /// <summary>
     /// Html to PDF converter (.NET WkHtmlToPdf process wrapper).
@@ -91,7 +91,7 @@ namespace WkWrap.Core
         /// </summary>
         /// <param name="input">HTML content input stream.</param>
         /// <param name="output">PDF file output stream.</param>
-        public Task ConvertToPdf(Stream input, Stream output) => ConvertToPdf(input, output, ConversionSettings.CreateDefault());
+        public Task ConvertToPdfAsync(Stream input, Stream output) => ConvertToPdfAsync(input, output, ConversionSettings.CreateDefault());
 
         /// <summary>
         /// Generates a PDF into specified output <see cref="Stream" />.
@@ -99,7 +99,7 @@ namespace WkWrap.Core
         /// <param name="input">HTML content input stream.</param>
         /// <param name="output">PDF file output stream.</param>
         /// <param name="settings">wkhtmltopdf command line arguments.</param>
-        public Task ConvertToPdf(Stream input, Stream output, ConversionSettings settings)
+        public Task ConvertToPdfAsync(Stream input, Stream output, ConversionSettings settings)
         {
             if (input == null)
             {

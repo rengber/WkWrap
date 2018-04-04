@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace WkWrap.Core
+namespace WkWrap
 {
     /// <summary>
     /// The exception that thrown when WkHtmlToPdf process retruns non-zero exit code.
