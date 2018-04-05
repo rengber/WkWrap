@@ -81,6 +81,11 @@ namespace WkWrap
         public string FooterPath { get; set; }
 
         /// <summary>
+        /// Gets or sets an arbitrary settings string to be passed to wkhtmltopdf.
+        /// </summary>
+        public string AdditionalSettings { get; set; }
+
+        /// <summary>
         /// Compose all settings to single wkhtmltopdf command line arguments string.
         /// </summary>
         public override string ToString()
@@ -178,10 +183,15 @@ namespace WkWrap
             {
                 if (!ValidPath(FooterPath))
                 {
-                    throw new InvalidOperationException($"The specified header path '{FooterPath}' is not a valid path or URL.");
+                    throw new InvalidOperationException($"The specified footer path '{FooterPath}' is not a valid path or URL.");
                 }
 
                 builder.AppendFormat(" --footer-html \"{0}\"", FooterPath);
+            }
+
+            if (!string.IsNullOrEmpty(AdditionalSettings))
+            {
+                builder.Append(" ").Append(AdditionalSettings.Trim());
             }
 
             return builder.ToString().Trim();
