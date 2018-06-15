@@ -10,7 +10,7 @@
     <Authors>Roman Bukin;Henk Mollema</Authors>
     <PackageTags>wkhtmltopdf;.net core</PackageTags>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.4'">
     <PackageReference Include="System.Diagnostics.Process" Version="4.3.0" />
   </ItemGroup>
 </Project>
